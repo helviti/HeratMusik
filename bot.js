@@ -5,7 +5,6 @@ const {
   getTime, deleteMessage,
 } = require('./utils.js');
 
-
 const prefix = '!'
 const sPrefix = '?'
 
@@ -22,8 +21,6 @@ async function TEXT(msg) {
       else {
         let args = msg.content.substring(prefix.length).split(prefix);
 
-        
-
         try {
 
           let id = ytdl.getURLVideoID(args[0])
@@ -31,20 +28,14 @@ async function TEXT(msg) {
           let duration = `${Math.floor(info.videoDetails.lengthSeconds / 60)}:${info.videoDetails.lengthSeconds % 60}`
 
           const exampleEmbed = new Discord.MessageEmbed()
-            .setTitle(info.videoDetails.title)
+            .setTitle(`${info.videoDetails.title} [${duration}]`)
             .setURL(args[0])
             .setDescription(`Added to the queue by ${msg.member.displayName}`)
-            .setThumbnail(info.videoDetails.thumbnail.thumbnails[0].url)
+            .setThumbnail(info.videoDetails.thumbnail.thumbnails[3].url)
 
           msg.channel.send(exampleEmbed);
 
-
-
-
           //msg.channel.send(`:arrow_forward: Playing now: [${}](${args[0]}) [${duration}] `)
-
-
-          console.log(info.videoDetails.thumbnail)
 
           voiceChannel.join().then(connection => {
             const stream = ytdl(id, { filter: 'audioonly', liveBuffer: 5000 });
@@ -57,14 +48,9 @@ async function TEXT(msg) {
           msg.channel.send(`Video id '${args[0]}' not found.`)
           console.log(err)
         }
-
         deleteMessage(msg);
 
-
       }
-
-
-
     }
 
     if (msg.content.startsWith(sPrefix)) {
