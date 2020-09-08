@@ -9,6 +9,8 @@ const {
 const prefix = '!'
 const sPrefix = '?'
 let queue = []
+let volume = 1.0;
+let dispatcher = null;
 
 class Song {
   constructor(url, details, author, channel, member) {
@@ -29,14 +31,21 @@ const videoMessage = {
 async function TEXT(msg, client) {
   try {
     const command = msg.content;
+    let match;
     if (command.startsWith(prefix)) {
       if(command.startsWith(`${prefix}queue`)) {
         sendQueue(msg.channel);
+        deleteMessage(msg);
       } else if (command.startsWith(`${prefix}skip`)) {
         skip(msg.member.voice.channel);
+        deleteMessage(msg);
       } else if (command.startsWith(`${prefix}clearplaylist`)) {
         clear(msg.member.voice.channel);
-      } else {
+        deleteMessage(msg);
+      } else if ((match = command.match(new RegExp(`${prefix}volume ([0-9]+\.?[0-9]*)`)))) {
+        setVolume(parseFloat(match[1], msg.member.voice.channel));
+        deleteMessage(msg);
+      } else if (command.startsWith(`${prefix}http`)) {
         if (!msg.member.voice.channel) {
           msg.reply('You are not in a channel.');
         }
@@ -83,6 +92,13 @@ function clear(channel) {
   }
 }
 
+function setVolume(newVolume) {
+  volume = newVolume;
+  if (queue.length > 0 && dispatcher) {
+    dispatcher.setVolume(newVolume);
+  }
+}
+
 async function queueOrPlay(connection, message, client) {
   const urlRaw = message.content.substring(prefix.length).split(prefix)[0];
   if (urlRaw.includes('.com/playlist?list=')) {
@@ -123,7 +139,7 @@ async function playSong(connection, client) {
   const current = queue[0];
 
   const stream = ytdl(current.url, { filter: 'audioonly', liveBuffer: 5000 });
-  const dispatcher = connection.play(stream);
+  dispatcher = connection.play(stream, { volume: volume });
 
   client.user.setActivity(current.details.title, { type: 'LISTENING' });
 
@@ -161,6 +177,7 @@ function sendVideoInfoMessage(type, song, client) {
 }
 
 function sendQueue(channel) {
+  if(queue.length == 0) return;
   let msg = '**Current Queue:**\n';
   for (let i = 0; i < queue.length; i++) {
     const song = queue[i];
@@ -190,7 +207,7 @@ function durationString(sec) {
 }
 
 
-module.exports.startBot = function startBot(token) {
+module.exports.startMusikBot = function startMusikBot(token) {
   const client = new Discord.Client();
 
   client.on('ready', () => {
