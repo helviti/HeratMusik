@@ -7,10 +7,11 @@ const {
 
 const prefix = '!'
 const sPrefix = '?'
+let queue = []
 
 // ON TEXT CHANNEL
 
-async function TEXT(msg) {
+async function TEXT(msg, client) {
   try {
 
     if (msg.content.startsWith(prefix)) {
@@ -27,21 +28,25 @@ async function TEXT(msg) {
           let info = await ytdl.getInfo(id);
           let duration = `${Math.floor(info.videoDetails.lengthSeconds / 60)}:${info.videoDetails.lengthSeconds % 60}`
 
-          const exampleEmbed = new Discord.MessageEmbed()
+          const videoEmbed = new Discord.MessageEmbed()
             .setTitle(`${info.videoDetails.title} [${duration}]`)
             .setURL(args[0])
             .setDescription(`Added to the queue by ${msg.member.displayName}`)
             .setThumbnail(info.videoDetails.thumbnail.thumbnails[3].url)
 
-          msg.channel.send(exampleEmbed);
-
-          //msg.channel.send(`:arrow_forward: Playing now: [${}](${args[0]}) [${duration}] `)
+          msg.channel.send(videoEmbed);
 
           voiceChannel.join().then(connection => {
             const stream = ytdl(id, { filter: 'audioonly', liveBuffer: 5000 });
             const dispatcher = connection.play(stream);
 
-            dispatcher.on('finish', () => voiceChannel.leave());
+            client.user.setActivity(info.videoDetails.title, { type: 'LISTENING' });
+
+            dispatcher.on('finish', () => {
+              client.user.setActivity('')
+              voiceChannel.leave()
+            })
+
           });
         }
         catch (err) {
@@ -70,7 +75,7 @@ module.exports.startBot = function startBot(token) {
   });
 
   client.on('message', (msg) => {
-    if (msg.channel.type === 'text') { TEXT(msg); }
+    if (msg.channel.type === 'text') { TEXT(msg, client); }
   });
 
   process.on('unhandledRejection', (error) => {
