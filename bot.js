@@ -30,7 +30,7 @@ async function TEXT(msg, client) {
     const command = msg.content;
     if (command.startsWith(prefix)) {
       if(command.startsWith(`${prefix}queue`)) {
-
+        sendQueue(msg.channel);
       }
       else {
         if (!msg.member.voice.channel) {
@@ -118,7 +118,18 @@ function sendVideoInfoMessage(type, song, client) {
 }
 
 function sendQueue(channel) {
-  
+  let msg = '**Current Queue:**\n';
+  for (let i = 0; i < queue.length; i++) {
+    const song = queue[i];
+    if (i == 0) msg += '**NP:**'
+    else msg += `**${i}:**`
+    msg += `\'${song.details.title}\' added by **${song.member.displayName}**`;
+    if(i < queue.length - 1) {
+      msg += '\n';
+    }
+  }
+
+  channel.send(msg);
 }
 
 function durationString(sec) {
