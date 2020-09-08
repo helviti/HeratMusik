@@ -9,52 +9,28 @@ const prefix = '!'
 const sPrefix = '?'
 let queue = []
 
-// ON TEXT CHANNEL
+class song {
+  constructor(url, author) {
+    this.url = url;
+    this.author = author;
+  }
+}
 
+// ON TEXT CHANNEL
 async function TEXT(msg, client) {
   try {
-
     if (msg.content.startsWith(prefix)) {
-      const voiceChannel = msg.member.voice.channel;
-      if (!voiceChannel) {
+      if (!msg.member.voice.channel) {
         msg.reply('You are not in a channel.');
+        console.log(msg.member.voice.channel);
       }
-      else {
-        let args = msg.content.substring(prefix.length).split(prefix);
-
-        try {
-
-          let id = ytdl.getURLVideoID(args[0])
-          let info = await ytdl.getInfo(id);
-          let duration = `${Math.floor(info.videoDetails.lengthSeconds / 60)}:${info.videoDetails.lengthSeconds % 60}`
-
-          const videoEmbed = new Discord.MessageEmbed()
-            .setTitle(`${info.videoDetails.title} [${duration}]`)
-            .setURL(args[0])
-            .setDescription(`Added to the queue by ${msg.member.displayName}`)
-            .setThumbnail(info.videoDetails.thumbnail.thumbnails[3].url)
-
-          msg.channel.send(videoEmbed);
-
-          voiceChannel.join().then(connection => {
-            const stream = ytdl(id, { filter: 'audioonly', liveBuffer: 5000 });
-            const dispatcher = connection.play(stream);
-
-            client.user.setActivity(info.videoDetails.title, { type: 'LISTENING' });
-
-            dispatcher.on('finish', () => {
-              client.user.setActivity('')
-              voiceChannel.leave()
-            })
-
-          });
+      if (!msg.member.voice.connection) {
+        console.log(msg.member.voice.channel);
+        msg.member.voice.channel.join().then(connection => {
+          console.log('new');
+          playSong(connection, msg, client);
         }
-        catch (err) {
-          msg.channel.send(`Video id '${args[0]}' not found.`)
-          console.log(err)
-        }
-        deleteMessage(msg);
-
+        );
       }
     }
 
@@ -66,6 +42,54 @@ async function TEXT(msg, client) {
     console.log(err);
   }
 }
+
+async function playSong(connection, message, client) {
+  let args = message.content.substring(prefix.length).split(prefix);
+  let id = ytdl.getURLVideoID(args[0]);
+  let info = await ytdl.getInfo(id);
+  info = info.videoDetails;
+
+  queue.push(new song(id, message.member.displayName));
+  console.log(queue);
+
+  const stream = ytdl(queue[0].url, { filter: 'audioonly', liveBuffer: 5000 });
+  const dispatcher = connection.play(stream);
+
+  client.user.setActivity(info.title, { type: 'LISTENING' });
+  deleteMessage(message);
+
+  let duration = durationString(info.lengthSeconds);
+  const videoEmbed = new Discord.MessageEmbed()
+    .setTitle(`Now Playing on ${client.user.tag}`)
+    .setURL(args[0])
+    .setDescription(`**Title:** ${info.title} 
+            **Duration:** ${duration}`)
+    .setImage(info.thumbnail.thumbnails[3].url)
+    .setFooter(`Added to the queue by ${queue[0].author}`, message.author.avatarURL())
+
+  message.channel.send(videoEmbed);
+
+  queue.shift();
+
+  dispatcher.on('finish', () => {
+    if (queue[0]) {
+      playSong(connection, message, client);
+    }
+    else {
+      client.user.setActivity('')
+      connection.disconnect();
+    }
+
+  })
+
+
+}
+
+function durationString(sec) {
+  let convStr = Math.floor(sec % 60) < 10 ? `0${sec % 60}` : (sec % 60);
+  return `${Math.floor(sec / 60)}:${convStr.toString()}`
+}
+
 
 module.exports.startBot = function startBot(token) {
   const client = new Discord.Client();
@@ -84,3 +108,4 @@ module.exports.startBot = function startBot(token) {
 
   client.login(token);
 }
+
