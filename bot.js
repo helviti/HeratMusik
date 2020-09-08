@@ -9,31 +9,43 @@ const prefix = '!'
 const sPrefix = '?'
 let queue = []
 
-class song {
-  constructor(url, author, channel, member) {
+class Song {
+  constructor(url, details, author, channel, member) {
     this.url = url;
     this.author = author;
     this.channel = channel;
     this.member = member;
+    this.details = details;
   }
 }
+
+const videoMessage = {
+  QUEUED: 0,
+  NOWPLAYING: 1
+};
 
 // ON TEXT CHANNEL
 async function TEXT(msg, client) {
   try {
-    if (msg.content.startsWith(prefix)) {
-      if (!msg.member.voice.channel) {
-        msg.reply('You are not in a channel.');
+    const command = msg.content;
+    if (command.startsWith(prefix)) {
+      if(command.startsWith(`${prefix}queue`)) {
+
       }
       else {
-        const channel = msg.member.voice.channel;
-        if(channel == client.voice.channel) {
-          queueOrPlay(connection, msg, client);
+        if (!msg.member.voice.channel) {
+          msg.reply('You are not in a channel.');
         }
         else {
-          msg.member.voice.channel.join().then(connection => {
+          const channel = msg.member.voice.channel;
+          if(channel == client.voice.channel) {
             queueOrPlay(connection, msg, client);
-          });
+          }
+          else {
+            channel.join().then(connection => {
+              queueOrPlay(connection, msg, client);
+            });
+          }
         }
       }
     }
@@ -50,35 +62,28 @@ async function TEXT(msg, client) {
 async function queueOrPlay(connection, message, client) {
   const args = message.content.substring(prefix.length).split(prefix);
   const url = args[0];
-  queue.push(new song(url, message.author, message.channel, message.member));
-  deleteMessage(message);
-  if(queue.length == 1) {
+  let info = await ytdl.getInfo(ytdl.getURLVideoID(url));
+  info = info.videoDetails;
+  const willPlay = queue.length == 0;
+  queue.push(new Song(url, info, message.author, message.channel, message.member));
+  if(willPlay) {
     playSong(connection, client);
   }
-  console.log(queue.length);
+  else {
+    sendVideoInfoMessage(videoMessage.QUEUED, info, url, message.member, message.author, message.channel, client);
+  }
+  deleteMessage(message);
 }
 
 async function playSong(connection, client) {
   const current = queue[0];
-  const id = ytdl.getURLVideoID(current.url);
-  let info = await ytdl.getInfo(id);
-  info = info.videoDetails;
 
   const stream = ytdl(current.url, { filter: 'audioonly', liveBuffer: 5000 });
   const dispatcher = connection.play(stream);
 
-  client.user.setActivity(info.title, { type: 'LISTENING' });
+  client.user.setActivity(current.details.title, { type: 'LISTENING' });
 
-  let duration = durationString(info.lengthSeconds);
-  const videoEmbed = new Discord.MessageEmbed()
-    .setTitle(`Now Playing on ${client.user.tag}`)
-    .setURL(current.url)
-    .setDescription(`**Title:** ${info.title} 
-            **Duration:** ${duration}`)
-    .setImage(info.thumbnail.thumbnails[3].url)
-    .setFooter(`Added to the queue by ${current.member.displayName}`, current.author.avatarURL())
-
-  current.channel.send(videoEmbed);
+  sendVideoInfoMessage(videoMessage.NOWPLAYING, current.details, current.url, current.member, current.author, current.channel, client);
 
   dispatcher.on('finish', () => {
     queue.shift();
@@ -91,8 +96,24 @@ async function playSong(connection, client) {
     }
 
   })
+}
 
-
+function sendVideoInfoMessage(type, info, url, member, author, channel, client) {  
+  const embed = new Discord.MessageEmbed()
+  const thumbnail = info.thumbnail.thumbnails[3].url;
+  switch(type) {
+    case videoMessage.QUEUED:
+      embed.setThumbnail(thumbnail).setTitle(`Queued on ${client.user.tag}`);
+      break;
+    case videoMessage.NOWPLAYING:
+      embed.setImage(thumbnail).setTitle(`Now Playing on ${client.user.tag}`);
+      break;
+  };
+  embed.setURL(url)
+    .setDescription(`**Title:** ${info.title} 
+      **Duration:** ${durationString(info.lengthSeconds)}`)
+    .setFooter(`Added to the queue by ${member.displayName}`, author.avatarURL());
+  channel.send(embed);
 }
 
 function durationString(sec) {
