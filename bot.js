@@ -10,9 +10,11 @@ const sPrefix = '?'
 let queue = []
 
 class song {
-  constructor(url, author) {
+  constructor(url, author, channel, member) {
     this.url = url;
     this.author = author;
+    this.channel = channel;
+    this.member = member;
   }
 }
 
@@ -22,15 +24,17 @@ async function TEXT(msg, client) {
     if (msg.content.startsWith(prefix)) {
       if (!msg.member.voice.channel) {
         msg.reply('You are not in a channel.');
-        console.log(msg.member.voice.channel);
       }
-      if (!msg.member.voice.connection) {
-        console.log(msg.member.voice.channel);
-        msg.member.voice.channel.join().then(connection => {
-          console.log('new');
-          playSong(connection, msg, client);
+      else {
+        const channel = msg.member.voice.channel;
+        if(channel == client.voice.channel) {
+          queueOrPlay(connection, msg, client);
         }
-        );
+        else {
+          msg.member.voice.channel.join().then(connection => {
+            queueOrPlay(connection, msg, client);
+          });
+        }
       }
     }
 
@@ -43,37 +47,43 @@ async function TEXT(msg, client) {
   }
 }
 
-async function playSong(connection, message, client) {
-  let args = message.content.substring(prefix.length).split(prefix);
-  let id = ytdl.getURLVideoID(args[0]);
+async function queueOrPlay(connection, message, client) {
+  const args = message.content.substring(prefix.length).split(prefix);
+  const url = args[0];
+  queue.push(new song(url, message.author, message.channel, message.member));
+  deleteMessage(message);
+  if(queue.length == 1) {
+    playSong(connection, client);
+  }
+  console.log(queue.length);
+}
+
+async function playSong(connection, client) {
+  const current = queue[0];
+  const id = ytdl.getURLVideoID(current.url);
   let info = await ytdl.getInfo(id);
   info = info.videoDetails;
 
-  queue.push(new song(id, message.member.displayName));
-  console.log(queue);
-
-  const stream = ytdl(queue[0].url, { filter: 'audioonly', liveBuffer: 5000 });
+  const stream = ytdl(current.url, { filter: 'audioonly', liveBuffer: 5000 });
   const dispatcher = connection.play(stream);
 
   client.user.setActivity(info.title, { type: 'LISTENING' });
-  deleteMessage(message);
 
   let duration = durationString(info.lengthSeconds);
   const videoEmbed = new Discord.MessageEmbed()
     .setTitle(`Now Playing on ${client.user.tag}`)
-    .setURL(args[0])
+    .setURL(current.url)
     .setDescription(`**Title:** ${info.title} 
             **Duration:** ${duration}`)
     .setImage(info.thumbnail.thumbnails[3].url)
-    .setFooter(`Added to the queue by ${queue[0].author}`, message.author.avatarURL())
+    .setFooter(`Added to the queue by ${current.member.displayName}`, current.author.avatarURL())
 
-  message.channel.send(videoEmbed);
-
-  queue.shift();
+  current.channel.send(videoEmbed);
 
   dispatcher.on('finish', () => {
+    queue.shift();
     if (queue[0]) {
-      playSong(connection, message, client);
+      playSong(connection, client);
     }
     else {
       client.user.setActivity('')
