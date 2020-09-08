@@ -32,21 +32,19 @@ async function TEXT(msg, client) {
     if (command.startsWith(prefix)) {
       if(command.startsWith(`${prefix}queue`)) {
         sendQueue(msg.channel);
-      }
-      else {
+      } else if (command.startsWith(`${prefix}skip`)) {
+        skip(msg.member.voice.channel);
+      } else if (command.startsWith(`${prefix}clearplaylist`)) {
+        clear(msg.member.voice.channel);
+      } else {
         if (!msg.member.voice.channel) {
           msg.reply('You are not in a channel.');
         }
         else {
           const channel = msg.member.voice.channel;
-          if(channel == client.voice.channel) {
+          channel.join().then(connection => {
             queueOrPlay(connection, msg, client);
-          }
-          else {
-            channel.join().then(connection => {
-              queueOrPlay(connection, msg, client);
-            });
-          }
+          });
         }
       }
     }
@@ -57,6 +55,31 @@ async function TEXT(msg, client) {
 
   } catch (err) {
     console.log(err);
+  }
+}
+
+function skip(channel) {
+  if(queue.length > 0 && channel) {
+    channel.join().then(connection => {
+      if (queue.length > 0) {
+        queue.shift();
+        if(queue.length > 0) {
+          playSong(connection, connection.client);
+        }
+        else {
+          connection.disconnect();
+        }
+      }
+    });
+  }
+}
+
+function clear(channel) {
+  if (queue.length > 0 && channel) {          
+    channel.join().then(connection => {
+      queue = [];
+      connection.disconnect();
+    });
   }
 }
 
