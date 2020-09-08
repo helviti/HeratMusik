@@ -12,6 +12,7 @@
     "@discordjs/opus": "^0.3.2",
     "discord.js": "^12.3.1",
     "moment": "^2.27.0",
+    "youtube-playlist": "^1.0.4",
     "ytdl-core": "^3.2.2"
   }
 }

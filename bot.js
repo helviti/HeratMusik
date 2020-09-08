@@ -1,5 +1,6 @@
 const Discord = require('discord.js');
 const ytdl = require('ytdl-core');
+const ytlist = require('youtube-playlist'); 
 
 const {
   getTime, deleteMessage,
@@ -60,20 +61,39 @@ async function TEXT(msg, client) {
 }
 
 async function queueOrPlay(connection, message, client) {
-  const args = message.content.substring(prefix.length).split(prefix);
-  const url = args[0];
-  let info = await ytdl.getInfo(ytdl.getURLVideoID(url));
-  info = info.videoDetails;
-  const willPlay = queue.length == 0;
-  const song = new Song(url, info, message.author, message.channel, message.member);
-  queue.push(song);
-  if(willPlay) {
-    playSong(connection, client);
+  const urlRaw = message.content.substring(prefix.length).split(prefix)[0];
+  if (urlRaw.includes('.com/playlist?list=')) {
+    const res = await ytlist(urlRaw, 'url');
+    const playlist = res.data.playlist;
+    for (let i = 0; i < playlist.length; i++) {
+      try {
+        await processUrl(playlist[i], true);
+      } catch (err) {
+        console.log(err);
+      }
+    }
+
+    message.reply('Queued the playlist!');
+    deleteMessage(message);
   }
   else {
-    sendVideoInfoMessage(videoMessage.QUEUED, song, client);
+    processUrl(urlRaw, false);
+    deleteMessage(message);
   }
-  deleteMessage(message);
+
+  async function processUrl(url, isSilent) {
+    let info = await ytdl.getInfo(ytdl.getURLVideoID(url));
+    info = info.videoDetails;
+    const willPlay = queue.length == 0;
+    const song = new Song(url, info, message.author, message.channel, message.member);
+    queue.push(song);
+    if(willPlay) {
+      playSong(connection, client);
+    }
+    else if (!isSilent) {
+      sendVideoInfoMessage(videoMessage.QUEUED, song, client);
+    }
+  }
 }
 
 async function playSong(connection, client) {
@@ -121,11 +141,20 @@ function sendQueue(channel) {
   let msg = '**Current Queue:**\n';
   for (let i = 0; i < queue.length; i++) {
     const song = queue[i];
-    if (i == 0) msg += '**NP:**'
-    else msg += `**${i}:**`
-    msg += `\'${song.details.title}\' added by **${song.member.displayName}**`;
+    let entry = '';
+    if (i == 0) entry += '**NP:**'
+    else entry += `**${i}:**`
+    entry += `\'${song.details.title}\' added by **${song.member.displayName}**`;
     if(i < queue.length - 1) {
-      msg += '\n';
+      entry += '\n';
+    }
+    
+    if(entry.length + msg.length > 2000) {
+      channel.send(msg);
+      msg = entry;
+    }
+    else {
+      msg += entry;
     }
   }
 
