@@ -65,12 +65,13 @@ async function queueOrPlay(connection, message, client) {
   let info = await ytdl.getInfo(ytdl.getURLVideoID(url));
   info = info.videoDetails;
   const willPlay = queue.length == 0;
-  queue.push(new Song(url, info, message.author, message.channel, message.member));
+  const song = new Song(url, info, message.author, message.channel, message.member);
+  queue.push(song);
   if(willPlay) {
     playSong(connection, client);
   }
   else {
-    sendVideoInfoMessage(videoMessage.QUEUED, info, url, message.member, message.author, message.channel, client);
+    sendVideoInfoMessage(videoMessage.QUEUED, song, client);
   }
   deleteMessage(message);
 }
@@ -83,7 +84,7 @@ async function playSong(connection, client) {
 
   client.user.setActivity(current.details.title, { type: 'LISTENING' });
 
-  sendVideoInfoMessage(videoMessage.NOWPLAYING, current.details, current.url, current.member, current.author, current.channel, client);
+  sendVideoInfoMessage(videoMessage.NOWPLAYING, current, client);
 
   dispatcher.on('finish', () => {
     queue.shift();
@@ -98,9 +99,9 @@ async function playSong(connection, client) {
   })
 }
 
-function sendVideoInfoMessage(type, info, url, member, author, channel, client) {  
+function sendVideoInfoMessage(type, song, client) {  
   const embed = new Discord.MessageEmbed()
-  const thumbnail = info.thumbnail.thumbnails[3].url;
+  const thumbnail = song.details.thumbnail.thumbnails[3].url;
   switch(type) {
     case videoMessage.QUEUED:
       embed.setThumbnail(thumbnail).setTitle(`Queued on ${client.user.tag}`);
@@ -109,11 +110,15 @@ function sendVideoInfoMessage(type, info, url, member, author, channel, client) 
       embed.setImage(thumbnail).setTitle(`Now Playing on ${client.user.tag}`);
       break;
   };
-  embed.setURL(url)
-    .setDescription(`**Title:** ${info.title} 
-      **Duration:** ${durationString(info.lengthSeconds)}`)
-    .setFooter(`Added to the queue by ${member.displayName}`, author.avatarURL());
-  channel.send(embed);
+  embed.setURL(song.url)
+    .setDescription(`**Title:** ${song.details.title} 
+      **Duration:** ${durationString(song.details.lengthSeconds)}`)
+    .setFooter(`Added to the queue by ${song.member.displayName}`, song.author.avatarURL());
+  song.channel.send(embed);
+}
+
+function sendQueue(channel) {
+  
 }
 
 function durationString(sec) {
