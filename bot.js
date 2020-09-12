@@ -55,8 +55,6 @@ async function TEXT(msg, client) {
       } else if ((match = command.match(new RegExp(`${prefix}volume ([0-9]+\.?[0-9]*)`)))) {
         setVolume(parseFloat(match[1], msg.member.voice.channel));
         deleteMessage(msg);
-      } else if ((match = command.match(new RegExp(`${prefix}search (.+ *)+`)))) {
-        searchyoutube(match[1], msg);
       } else if (command.startsWith(`${prefix}http`)) {
         if (!msg.member.voice.channel) {
           msg.reply('You are not in a channel.');
@@ -73,6 +71,8 @@ async function TEXT(msg, client) {
       searchData.member.id == msg.member.id &&
       searchData.msg.channel.id == msg.channel.id) {
       respondToSearch(parseInt(command) - 1, msg, client);
+    } else if ((match = command.match(new RegExp(`^\\${sPrefix}(.+ *)+`)))) {
+      searchyoutube(match[1], msg);
     }
 
     if (msg.content.startsWith(sPrefix)) {
@@ -136,16 +136,17 @@ function searchyoutube (key, msg) {
 }
 
 function respondToSearch(response, msg, client) {
-  console.log('Attempting play...');
   if(response >= searchData.results.length || response < 0) return;
-  searchData.msg = null;
+  if(searchData.msg != null) {
+    deleteMessage(searchData.msg);
+    searchData.msg = null;
+  }
   if (!msg.member.voice.channel) {
     msg.reply('You are not in a channel.');
   }
   else {
     const channel = msg.member.voice.channel;
     channel.join().then(connection => {
-      console.log('Attempting play...');
       msg.content = `${prefix}${searchData.results[response].link}`
       queueOrPlay(connection, msg, client);
     });
