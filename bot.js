@@ -1,13 +1,23 @@
 const Discord = require('discord.js');
 const ytdl = require('ytdl-core');
-const ytlist = require('youtube-playlist'); 
+const ytlist = require('youtube-playlist');
+const search = require('youtube-search');
 
 const {
   getTime, deleteMessage,
 } = require('./utils.js');
 
+class SearchData {
+  constructor(msg, results, member) {
+    this.msg = msg;
+    this.results = results;
+    this.member = member;
+  }
+}
+
 const prefix = '!'
 const sPrefix = '?'
+const searchData = new SearchData(null, null, null);
 let queue = []
 let volume = 1.0;
 let dispatcher = null;
@@ -45,6 +55,8 @@ async function TEXT(msg, client) {
       } else if ((match = command.match(new RegExp(`${prefix}volume ([0-9]+\.?[0-9]*)`)))) {
         setVolume(parseFloat(match[1], msg.member.voice.channel));
         deleteMessage(msg);
+      } else if ((match = command.match(new RegExp(`${prefix}search (.+ *)+`)))) {
+        searchyoutube(match[1], msg);
       } else if (command.startsWith(`${prefix}http`)) {
         if (!msg.member.voice.channel) {
           msg.reply('You are not in a channel.');
@@ -56,6 +68,11 @@ async function TEXT(msg, client) {
           });
         }
       }
+    } else if (command.match(/^[1-9][0-9]?$/) &&
+      searchData.msg != null &&
+      searchData.member.id == msg.member.id &&
+      searchData.msg.channel.id == msg.channel.id) {
+      respondToSearch(parseInt(command) - 1, msg, client);
     }
 
     if (msg.content.startsWith(sPrefix)) {
@@ -96,6 +113,42 @@ function setVolume(newVolume) {
   volume = newVolume;
   if (queue.length > 0 && dispatcher) {
     dispatcher.setVolume(newVolume);
+  }
+}
+
+function searchyoutube (key, msg) {
+  if (searchData.msg != null) {
+    deleteMessage(searchData.msg);
+    searchData.msg = null;
+  }
+  searchData.member = msg.member;
+  search(key, {maxResults: 10, key: process.env.YOUTUBE_API_KEY, type:'video'}, function(err, results) {
+    if(err) return console.log(err);
+    searchData.results = results;
+    let msgText = `**Search results for ${key}:**`;
+    for (let i = 0; i < results.length; i++) {
+      const element = results[i];
+      msgText += `\n**${i + 1}:** ${element.title} **by** ${element.channelTitle}`
+    }
+    msg.reply(msgText).then(newMsg => searchData.msg = newMsg);
+    deleteMessage(msg);
+  });
+}
+
+function respondToSearch(response, msg, client) {
+  console.log('Attempting play...');
+  if(response >= searchData.results.length || response < 0) return;
+  searchData.msg = null;
+  if (!msg.member.voice.channel) {
+    msg.reply('You are not in a channel.');
+  }
+  else {
+    const channel = msg.member.voice.channel;
+    channel.join().then(connection => {
+      console.log('Attempting play...');
+      msg.content = `${prefix}${searchData.results[response].link}`
+      queueOrPlay(connection, msg, client);
+    });
   }
 }
 
