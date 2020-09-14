@@ -233,7 +233,7 @@ function sendVideoInfoMessage(type, song, client) {
 
 async function w2gRoomCreate(msg) {
   const embed = new Discord.MessageEmbed();
-  const url = message.content.substring(w2gPrefix.length).split(w2gPrefix)[0];
+  const url = msg.content.substring(w2gPrefix.length).split(w2gPrefix)[0];
   const response = await axios.post('https://w2g.tv/rooms/create.json', {
     "w2g_api_key": process.env.W2G_API_KEY,
     "share": url
