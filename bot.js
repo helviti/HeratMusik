@@ -238,9 +238,12 @@ async function w2gRoomCreate(msg) {
     "w2g_api_key": process.env.W2G_API_KEY,
     "share": url
   })
-  const roomKey = response.streamkey;
+  const roomKey = response.data.streamkey;
+
+
   const roomURL = `http://w2g.tv/rooms/${roomKey}`;
-  embed.setTitle(`WatchTogether Room: ${roomURL}`)
+  embed.setTitle(`New WatchTogether Room`)
+    .setDescription(`[${roomURL}](${roomURL})`)
     .setThumbnail('https://w2g.tv/static/watch2gether-share.jpg')
     .setFooter(`Created by ${msg.member.displayName}`, msg.author.avatarURL())
     .setURL(roomURL)
