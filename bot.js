@@ -2,6 +2,7 @@ const Discord = require('discord.js');
 const ytdl = require('ytdl-core');
 const ytlist = require('youtube-playlist');
 const search = require('youtube-search');
+const axios = require('axios');
 
 const {
   getTime, deleteMessage,
@@ -17,6 +18,7 @@ class SearchData {
 
 const prefix = '!'
 const sPrefix = '?'
+const w2gPrefix = '>'
 const searchData = new SearchData(null, null, null);
 let queue = []
 let volume = 1.0;
@@ -43,7 +45,7 @@ async function TEXT(msg, client) {
     const command = msg.content;
     let match;
     if (command.startsWith(prefix)) {
-      if(command.startsWith(`${prefix}queue`)) {
+      if (command.startsWith(`${prefix}queue`)) {
         sendQueue(msg.channel);
         deleteMessage(msg);
       } else if (command.startsWith(`${prefix}skip`)) {
@@ -73,10 +75,9 @@ async function TEXT(msg, client) {
       respondToSearch(parseInt(command) - 1, msg, client);
     } else if ((match = command.match(new RegExp(`^\\${sPrefix}(.+ *)+`)))) {
       searchyoutube(match[1], msg);
-    }
-
-    if (msg.content.startsWith(sPrefix)) {
-
+    } else if (command.startsWith(w2gPrefix)) {
+      w2gRoomCreate(msg);
+      deleteMessage(msg);
     }
 
   } catch (err) {
@@ -85,11 +86,11 @@ async function TEXT(msg, client) {
 }
 
 function skip(channel) {
-  if(queue.length > 0 && channel) {
+  if (queue.length > 0 && channel) {
     channel.join().then(connection => {
       if (queue.length > 0) {
         queue.shift();
-        if(queue.length > 0) {
+        if (queue.length > 0) {
           playSong(connection, connection.client);
         }
         else {
@@ -101,7 +102,7 @@ function skip(channel) {
 }
 
 function clear(channel) {
-  if (queue.length > 0 && channel) {          
+  if (queue.length > 0 && channel) {
     channel.join().then(connection => {
       queue = [];
       connection.disconnect();
@@ -116,14 +117,14 @@ function setVolume(newVolume) {
   }
 }
 
-function searchyoutube (key, msg) {
+function searchyoutube(key, msg) {
   if (searchData.msg != null) {
     deleteMessage(searchData.msg);
     searchData.msg = null;
   }
   searchData.member = msg.member;
-  search(key, {maxResults: 10, key: process.env.YOUTUBE_API_KEY, type:'video'}, function(err, results) {
-    if(err) return console.log(err);
+  search(key, { maxResults: 10, key: process.env.YOUTUBE_API_KEY, type: 'video' }, function (err, results) {
+    if (err) return console.log(err);
     searchData.results = results;
     let msgText = `**Search results for ${key}:**`;
     for (let i = 0; i < results.length; i++) {
@@ -136,8 +137,8 @@ function searchyoutube (key, msg) {
 }
 
 function respondToSearch(response, msg, client) {
-  if(response >= searchData.results.length || response < 0) return;
-  if(searchData.msg != null) {
+  if (response >= searchData.results.length || response < 0) return;
+  if (searchData.msg != null) {
     deleteMessage(searchData.msg);
     searchData.msg = null;
   }
@@ -180,7 +181,7 @@ async function queueOrPlay(connection, message, client) {
     const willPlay = queue.length == 0;
     const song = new Song(url, info, message.author, message.channel, message.member);
     queue.push(song);
-    if(willPlay) {
+    if (willPlay) {
       playSong(connection, client);
     }
     else if (!isSilent) {
@@ -212,10 +213,10 @@ async function playSong(connection, client) {
   })
 }
 
-function sendVideoInfoMessage(type, song, client) {  
+function sendVideoInfoMessage(type, song, client) {
   const embed = new Discord.MessageEmbed()
   const thumbnail = song.details.thumbnail.thumbnails[3].url;
-  switch(type) {
+  switch (type) {
     case videoMessage.QUEUED:
       embed.setThumbnail(thumbnail).setTitle(`Queued on ${client.user.tag}`);
       break;
@@ -230,8 +231,25 @@ function sendVideoInfoMessage(type, song, client) {
   song.channel.send(embed);
 }
 
+async function w2gRoomCreate(msg) {
+  const embed = new Discord.MessageEmbed();
+  const url = message.content.substring(w2gPrefix.length).split(w2gPrefix)[0];
+  const response = await axios.post('https://w2g.tv/rooms/create.json', {
+    "w2g_api_key": process.env.W2G_API_KEY,
+    "share": url
+  })
+  const roomKey = response.streamkey;
+  const roomURL = `http://w2g.tv/rooms/${roomKey}`;
+  embed.setTitle(`WatchTogether Room: ${roomURL}`)
+    .setThumbnail('https://w2g.tv/static/watch2gether-share.jpg')
+    .setFooter(`Created by ${msg.member.displayName}`, msg.author.avatarURL())
+    .setURL(roomURL)
+    .setColor('#D1A427');
+  msg.channel.send(embed);
+}
+
 function sendQueue(channel) {
-  if(queue.length == 0) return;
+  if (queue.length == 0) return;
   let msg = '**Current Queue:**\n';
   for (let i = 0; i < queue.length; i++) {
     const song = queue[i];
@@ -239,11 +257,11 @@ function sendQueue(channel) {
     if (i == 0) entry += '**NP:**'
     else entry += `**${i}:**`
     entry += `\'${song.details.title}\' added by **${song.member.displayName}**`;
-    if(i < queue.length - 1) {
+    if (i < queue.length - 1) {
       entry += '\n';
     }
-    
-    if(entry.length + msg.length > 2000) {
+
+    if (entry.length + msg.length > 2000) {
       channel.send(msg);
       msg = entry;
     }
