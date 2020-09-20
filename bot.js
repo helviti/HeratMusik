@@ -7,6 +7,7 @@ const axios = require('axios');
 const {
   getTime, deleteMessage,
 } = require('./utils.js');
+const e = require('express');
 
 class SearchData {
   constructor(msg, results, member) {
@@ -16,13 +17,20 @@ class SearchData {
   }
 }
 
+class ActiveTrackInfo {
+  constructor(progressMsg, dispatcher) {
+    this.progressMsg = progressMsg;
+    this.dispatcher = dispatcher;
+  }
+}
+
 const prefix = '!'
 const sPrefix = '?'
 const w2gPrefix = '>'
 const searchData = new SearchData(null, null, null);
+const activeTrackInfo = new ActiveTrackInfo(null, null);
 let queue = []
 let volume = 1.0;
-let dispatcher = null;
 
 class Song {
   constructor(url, details, author, channel, member) {
@@ -90,6 +98,7 @@ function skip(channel) {
     channel.join().then(connection => {
       if (queue.length > 0) {
         queue.shift();
+        clearDurationIntervalAndMessage();
         if (queue.length > 0) {
           playSong(connection, connection.client);
         }
@@ -106,14 +115,15 @@ function clear(channel) {
     channel.join().then(connection => {
       queue = [];
       connection.disconnect();
+      clearDurationIntervalAndMessage();
     });
   }
 }
 
 function setVolume(newVolume) {
   volume = newVolume;
-  if (queue.length > 0 && dispatcher) {
-    dispatcher.setVolume(newVolume);
+  if (queue.length > 0 && activeTrackInfo.dispatcher != null) {
+    activeTrackInfo.dispatcher.setVolume(newVolume);
   }
 }
 
@@ -123,7 +133,7 @@ function searchyoutube(key, msg) {
     searchData.msg = null;
   }
   searchData.member = msg.member;
-  search(key, { maxResults: 10, key: process.env.YOUTUBE_API_KEY, type: 'video' }, function (err, results) {
+  search(key, { maxResults: 10, key: process.env.YOUTUBE_API_KEY, type: 'video' }, async function (err, results) {
     if (err) return console.log(err);
     searchData.results = results;
     let msgText = `**Search results for ${key}:**`;
@@ -194,13 +204,17 @@ async function playSong(connection, client) {
   const current = queue[0];
 
   const stream = ytdl(current.url, { filter: 'audioonly', liveBuffer: 5000 });
-  dispatcher = connection.play(stream, { volume: volume });
+  activeTrackInfo.dispatcher = connection.play(stream, { volume: volume });
 
   client.user.setActivity(current.details.title, { type: 'LISTENING' });
 
-  sendVideoInfoMessage(videoMessage.NOWPLAYING, current, client);
+  clearDurationIntervalAndMessage();
+  sendVideoInfoMessage(videoMessage.NOWPLAYING, current, client).then(async m => {
+    activeTrackInfo.progressMsg = await current.channel.send(`0:00/${durationString(current.details.lengthSeconds)}`);
+  });
 
-  dispatcher.on('finish', () => {
+  activeTrackInfo.dispatcher.on('finish', () => {
+    clearDurationIntervalAndMessage();
     queue.shift();
     if (queue[0]) {
       playSong(connection, client);
@@ -209,8 +223,7 @@ async function playSong(connection, client) {
       client.user.setActivity('')
       connection.disconnect();
     }
-
-  })
+  });
 }
 
 function sendVideoInfoMessage(type, song, client) {
@@ -228,7 +241,7 @@ function sendVideoInfoMessage(type, song, client) {
     .setDescription(`**Title:** ${song.details.title} 
       **Duration:** ${durationString(song.details.lengthSeconds)}`)
     .setFooter(`Added to the queue by ${song.member.displayName}`, song.author.avatarURL());
-  song.channel.send(embed);
+  return song.channel.send(embed);
 }
 
 async function w2gRoomCreate(msg) {
@@ -277,10 +290,16 @@ function sendQueue(channel) {
 }
 
 function durationString(sec) {
-  let convStr = Math.floor(sec % 60) < 10 ? `0${sec % 60}` : (sec % 60);
-  return `${Math.floor(sec / 60)}:${convStr.toString()}`
+  const convStr = Math.floor(sec % 60) < 10 ? `0${sec % 60}` : (sec % 60);
+  return `${Math.floor(sec / 60)}:${convStr.toString()}`;
 }
 
+function clearDurationIntervalAndMessage() {
+  if (activeTrackInfo.progressMsg != null) {
+    deleteMessage(activeTrackInfo.progressMsg);
+    activeTrackInfo.progressMsg = null;
+  }
+}
 
 module.exports.startMusikBot = function startMusikBot(token) {
   const client = new Discord.Client();
@@ -296,6 +315,16 @@ module.exports.startMusikBot = function startMusikBot(token) {
   process.on('unhandledRejection', (error) => {
     console.error(`${getTime()}: Unhandled promise rejection:`, error);
   });
+
+  setInterval(() => {
+    if (activeTrackInfo.progressMsg != null && activeTrackInfo.dispatcher != null) {
+      if (queue.length > 0) {
+        activeTrackInfo.progressMsg.edit(`${durationString(Math.round(activeTrackInfo.dispatcher.streamTime / 1000))}/${durationString(queue[0].details.lengthSeconds)}`);
+      } else {
+        clearDurationIntervalAndMessage();
+      }
+    }
+  }, 5000);
 
   client.login(token);
 }
