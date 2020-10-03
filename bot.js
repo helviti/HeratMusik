@@ -166,10 +166,12 @@ function respondToSearch(response, msg, client) {
 
 async function queueOrPlay(connection, message, client) {
   const urlRaw = message.content.substring(prefix.length).split(prefix)[0];
-  if (urlRaw.includes('.com/playlist?list=')) {
+  if (urlRaw.includes('list=')) {
     const res = await ytlist(urlRaw, 'url');
     const playlist = res.data.playlist;
-    for (let i = 0; i < playlist.length; i++) {
+    const indexMatch = urlRaw.match(/index=([0-9]+)/);
+    const startIndex = indexMatch ? (parseInt(indexMatch[1]) - 1) : 0;
+    for (let i = startIndex; i < playlist.length; i++) {
       try {
         await processUrl(playlist[i], true);
       } catch (err) {
