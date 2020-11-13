@@ -26,7 +26,7 @@ class ActiveTrackInfo {
 
 const prefix = '!'
 const sPrefix = '?'
-const w2gPrefix = '>'
+const w2gPrefix = '$'
 const searchData = new SearchData(null, null, null);
 const activeTrackInfo = new ActiveTrackInfo(null, null);
 let queue = []
