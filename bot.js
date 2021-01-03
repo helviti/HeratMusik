@@ -263,6 +263,7 @@ async function w2gRoomCreate(msg) {
     .setFooter(`Created by ${msg.member.displayName}`, msg.author.avatarURL())
     .setURL(roomURL)
     .setColor('#D1A427');
+  msg.channel.send(`<${roomURL}>`);
   msg.channel.send(embed);
 }
 
